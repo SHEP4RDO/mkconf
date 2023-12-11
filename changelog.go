@@ -1,0 +1,86 @@
+package mkconf
+
+import (
+	"fmt"
+	"reflect"
+	"time"
+)
+
+type ConfigChangeLog struct {
+	ConfigName string
+	FieldName  string
+	OldValue   interface{}
+	NewValue   interface{}
+	Timestamp  time.Time
+}
+
+func compareFields(configName, configFullName string, oldConfig, newConfig interface{}, changes *[]ConfigChangeLog) {
+	oldMap, ok := oldConfig.(map[string]interface{})
+	if !ok {
+		fmt.Println("Error: oldConfig is not of type map[string]interface{}")
+		return
+	}
+
+	newMap, ok := newConfig.(map[string]interface{})
+	if !ok {
+		fmt.Println("Error: newConfig is not of type map[string]interface{}")
+		return
+	}
+
+	for key, oldValue := range oldMap {
+		newValue, exists := newMap[key]
+		if exists {
+			if !reflect.DeepEqual(oldValue, newValue) {
+				changeLog := ConfigChangeLog{
+					ConfigName: configName,
+					FieldName:  key,
+					OldValue:   oldValue,
+					NewValue:   newValue,
+					Timestamp:  time.Now(),
+				}
+				*changes = append(*changes, changeLog)
+			}
+		} else {
+			changeLog := ConfigChangeLog{
+				ConfigName: configName,
+				FieldName:  key,
+				OldValue:   oldValue,
+				NewValue:   nil,
+				Timestamp:  time.Now(),
+			}
+			*changes = append(*changes, changeLog)
+		}
+	}
+
+	for key, newValue := range newMap {
+		_, exists := oldMap[key]
+		if !exists {
+			changeLog := ConfigChangeLog{
+				ConfigName: configName,
+				FieldName:  key,
+				OldValue:   nil,
+				NewValue:   newValue,
+				Timestamp:  time.Now(),
+			}
+			*changes = append(*changes, changeLog)
+		}
+	}
+}
+
+func isStruct(t reflect.Type) bool {
+	return t.Kind() == reflect.Struct
+}
+
+func (c *ConfigManager) logChanges(configName string, changes []ConfigChangeLog) {
+	c.logMutex.Lock()
+	defer c.logMutex.Unlock()
+	c.changeLogs[configName] = append(c.changeLogs[configName], changes...)
+	c.settings[configName].Ch_ConfigTracking <- struct{}{}
+}
+
+func (c *ConfigManager) GetLogChanges(configName string) []ConfigChangeLog {
+	return c.changeLogs[configName]
+}
+func (c *ConfigManager) GetChanLogChanges(configName string) chan struct{} {
+	return c.settings[configName].Ch_ConfigTracking
+}
