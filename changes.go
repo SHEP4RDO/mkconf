@@ -10,13 +10,13 @@ import (
 	"time"
 )
 
-func (c *ConfigManager) StartChangeMonitoring(configName string, v interface{}) error {
+func (c *ConfigList) StartChangeMonitoring(configName string, v interface{}) error {
 	quit := make(chan struct{})
 	settings, ok := c.settings[configName]
 	if !ok {
 		return fmt.Errorf("config not found: %s", configName)
 	}
-
+	c.settings[configName].enableChangeValidation = true
 	settings.ctx, settings.cancel = context.WithCancel(context.Background())
 	settings.waitGroup.Add(1)
 
@@ -39,7 +39,7 @@ func (c *ConfigManager) StartChangeMonitoring(configName string, v interface{}) 
 
 					err := c.checkConfigChanges(configName, v)
 					if err != nil {
-						fmt.Printf("monitoring: error checking config changes: %v\n", err)
+						fmt.Printf("monitoring: error checking config changes %v : %v\n", configName, err)
 						time.Sleep(time.Second * 10)
 					}
 
@@ -60,13 +60,14 @@ func (c *ConfigManager) StartChangeMonitoring(configName string, v interface{}) 
 	}()
 	return nil
 }
-func (c *ConfigManager) StopChangeMonitoring(configName string) {
+func (c *ConfigList) StopChangeMonitoring(configName string) {
 	if settings, ok := c.settings[configName]; ok {
 		settings.cancel()
 		settings.waitGroup.Wait()
+		c.settings[configName].enableChangeValidation = false
 	}
 }
-func (c *ConfigManager) checkConfigChanges(configName string, v interface{}) error {
+func (c *ConfigList) checkConfigChanges(configName string, v interface{}) error {
 	if c.settings[configName].enableChangeValidation {
 		var configMap map[string]interface{}
 		var err error
@@ -94,8 +95,9 @@ func (c *ConfigManager) checkConfigChanges(configName string, v interface{}) err
 				}
 			}
 			set := c.settings[configName]
-			set.config = v
+			set.config = &v
 			set.configMAP = configMap
+			set.lastConfigHash = hash
 			c.settings[configName] = set
 
 			select {

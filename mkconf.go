@@ -4,44 +4,52 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
+
+	. "mkconf/readers"
 )
 
 type ConfigSettings struct {
-	configName             string
-	configPath             string
-	configFullPath         string
-	configType             string
+	configName     string
+	configPath     string
+	configFullPath string
+	configType     string
+	Reader         ConfigReader
+	checkSec       int
+	repeatSec      int
+	lastConfigHash string
+
+	configMAP map[string]interface{}
+	config    interface{}
+
+	mu        sync.Mutex
+	ctx       context.Context
+	cancel    context.CancelFunc
+	waitGroup *sync.WaitGroup
+
 	enableChangeValidation bool
 	enableChangeTracking   bool
-	checkSec               int
-	repeatSec              int
-	Reader                 ConfigReader
-	lastConfigHash         string
-	mu                     sync.Mutex
-	ctx                    context.Context
-	cancel                 context.CancelFunc
-	waitGroup              *sync.WaitGroup
-	configMAP              map[string]interface{}
-	config                 interface{}
-	ch_ChangeValidation    chan struct{}
-	Ch_ConfigChanged       chan struct{}
-	Ch_ConfigTracking      chan struct{}
+
+	ch_ChangeValidation chan struct{}
+	Ch_ConfigChanged    chan struct{}
+	Ch_ConfigTracking   chan struct{}
 }
 
-type ConfigManager struct {
-	settings   map[string]*ConfigSettings
-	changeLogs map[string][]ConfigChangeLog
-	logMutex   sync.Mutex
+type ConfigList struct {
+	settingsMutex sync.Mutex
+	settings      map[string]*ConfigSettings
+	changeLogs    map[string][]ConfigChangeLog
+	logMutex      sync.Mutex
 }
 
-func NewConfigManager() *ConfigManager {
-	manager := &ConfigManager{}
-	manager.settings = make(map[string]*ConfigSettings)
-	return manager
+func NewConfigList() *ConfigList {
+	list := &ConfigList{}
+	list.settings = make(map[string]*ConfigSettings)
+	return list
 }
 
-func (c *ConfigManager) GetSettings(fileName string) *ConfigSettings {
+func (c *ConfigList) GetSettings(fileName string) *ConfigSettings {
 	return c.settings[fileName]
 }
 
@@ -65,7 +73,7 @@ func (c *ConfigSettings) SetConfigFullpath(fullPath string) *ConfigSettings {
 	c.configFullPath = fullPath
 	return c
 }
-func (c *ConfigManager) GetChangesChan(configName string) chan struct{} {
+func (c *ConfigList) GetChangesChan(configName string) chan struct{} {
 	return c.settings[configName].Ch_ConfigChanged
 }
 
@@ -90,48 +98,72 @@ func (c *ConfigSettings) SetChangeTracking(mode bool) *ConfigSettings {
 	c.enableChangeTracking = mode
 	return c
 }
-func (c *ConfigManager) LoadConfig(configName string, v interface{}) error {
+
+func (c *ConfigList) LoadConfig(configName string, v interface{}) error {
 	if c.settings[configName].Reader == nil {
 		reader := c.settings[configName].checkReader()
 		if reader == nil {
-			return fmt.Errorf("error while setting reader type - check your config file type")
+			return fmt.Errorf("%v error while setting reader type - check your config file type", configName)
 		}
 
 		c.settings[configName].SetReader(reader)
 	}
-	err := c.settings[configName].Reader.ReadConfig(c.settings[configName].configFullPath, &v)
+	err := c.settings[configName].Reader.ReadConfig(c.settings[configName].configFullPath, v)
 	if err != nil {
-		return fmt.Errorf("load config: error while read config: %v\n", err)
-	}
-	if c.settings[configName].enableChangeValidation {
-		hash, err := c.settings[configName].calculateFileHash(c.settings[configName].configFullPath)
-		if err != nil {
-			return fmt.Errorf("load config: error while calculate hash: %v", err)
-		}
-		c.settings[configName].setHash(hash)
-		c.StartChangeMonitoring(configName, &v)
+		return fmt.Errorf("load config %v: error while read config: %v\n", configName, err)
 	}
 	c.settings[configName].config = v
 	return nil
 }
+
+func (c *ConfigList) UpdateConfig(configName string, v interface{}) error {
+	c.settingsMutex.Lock()
+	defer c.settingsMutex.Unlock()
+
+	settings, ok := c.settings[configName]
+	if !ok {
+		return fmt.Errorf("config with name %s not found", configName)
+	}
+
+	if settings.Reader == nil {
+		return fmt.Errorf("reader not set for config %s", configName)
+	}
+
+	c.StopChangeMonitoring(configName)
+	defer c.StartChangeMonitoring(configName, v)
+
+	err := settings.Reader.UpdateConfig(settings.configFullPath, v)
+	if err != nil {
+		return fmt.Errorf("update config %s: %v", configName, err)
+	}
+
+	err = c.LoadConfig(configName, settings.config)
+	if err != nil {
+		return fmt.Errorf("reload config %s: %v", configName, err)
+	}
+
+	return nil
+}
+
 func (s *ConfigSettings) checkReader() ConfigReader {
-	switch s.configType {
-	case ".json", ".JSON":
+	_type := strings.ToLower(s.configType)
+	switch _type {
+	case ".json", ".mk.json":
 		return &JSONConfigReader{}
-	case ".xml", ".XML":
+	case ".xml", ".mk.xml":
 		return &XMLConfigReader{}
-	case ".yaml", ".yml", ".YAML", ".YML":
+	case ".yaml", ".yml", ".mk.yaml", ".mk.yml":
 		return &YAMLConfigReader{}
-	case ".toml", ".TOML":
+	case ".toml", ".mk.toml":
 		return &TOMLConfigReader{}
-	case ".ini", ".INI":
+	case ".ini", ".mk.ini":
 		return &INIConfigReader{}
 	default:
 		return nil
 	}
 }
 
-func (c *ConfigManager) AddConfig(configName, configPath, configType string, v interface{}) error {
+func (c *ConfigList) AddConfigList(configName, configPath, configType string, v interface{}) error {
 	var err error
 	settings := ConfigSettings{
 		configName:             configName,
@@ -153,7 +185,7 @@ func (c *ConfigManager) AddConfig(configName, configPath, configType string, v i
 	c.settings[configName].SetConfigPath(configPath).SetConfigFullpath(fullPath).defineReader()
 	err = c.settings[configName].defineHash(configName, v)
 	if err != nil {
-		return fmt.Errorf("mkconf: error add new config: %v", err)
+		return fmt.Errorf("mkconf: error add new config %v: %v", configName, err)
 	}
 	return nil
 }
@@ -164,11 +196,8 @@ func (c *ConfigSettings) defineHash(configName string, v interface{}) error {
 	if err != nil {
 		return fmt.Errorf("error calculate hash: %v", err)
 	}
-	configMap, err := c.convertToMap(c.configFullPath)
-	if err != nil {
-		return fmt.Errorf("error convert map: %v", err)
-	}
-	c.config = v
+	configMap, _ := c.convertToMap(c.configFullPath)
+	c.config = &v
 	c.configMAP = configMap
 	return nil
 }
