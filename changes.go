@@ -101,7 +101,7 @@ func (c *ConfigList) checkConfigChanges(configName string, v interface{}) error 
 			c.settings[configName] = set
 
 			select {
-			case c.settings[configName].Ch_ConfigChanged <- struct{}{}:
+			case c.settings[configName].Ch_ConfigChanged <- configName:
 			case c.settings[configName].Ch_ConfigTracking <- struct{}{}:
 			}
 		}

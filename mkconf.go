@@ -32,7 +32,7 @@ type ConfigSettings struct {
 	enableChangeTracking   bool
 
 	ch_ChangeValidation chan struct{}
-	Ch_ConfigChanged    chan struct{}
+	Ch_ConfigChanged    chan string
 	Ch_ConfigTracking   chan struct{}
 }
 
@@ -73,7 +73,7 @@ func (c *ConfigSettings) SetConfigFullpath(fullPath string) *ConfigSettings {
 	c.configFullPath = fullPath
 	return c
 }
-func (c *ConfigList) GetChangesChan(configName string) chan struct{} {
+func (c *ConfigList) GetChangesChan(configName string) chan string {
 	return c.settings[configName].Ch_ConfigChanged
 }
 
@@ -174,7 +174,7 @@ func (c *ConfigList) AddConfigList(configName, configPath, configType string, v 
 		checkSec:               1,
 		repeatSec:              10,
 		ch_ChangeValidation:    make(chan struct{}),
-		Ch_ConfigChanged:       make(chan struct{}),
+		Ch_ConfigChanged:       make(chan string),
 		Ch_ConfigTracking:      make(chan struct{}),
 		waitGroup:              new(sync.WaitGroup),
 	}

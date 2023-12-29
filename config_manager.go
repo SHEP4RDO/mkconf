@@ -113,11 +113,11 @@ func (cm *ConfigManager) WatchForChanges() {
 	for _, configName := range cm.configList.GetConfigNames() {
 		settings := cm.configList.GetSettings(configName)
 		if settings.enableChangeValidation {
-			go func(configName string, ch <-chan struct{}) {
-				for range ch {
-					fmt.Printf("Config '%s' has changed.\n", configName)
+			go func(ch <-chan string) {
+				for name := range ch {
+					fmt.Printf("Config '%v' has changed.\n", name)
 				}
-			}(configName, settings.Ch_ConfigChanged)
+			}(settings.Ch_ConfigChanged)
 		}
 	}
 }
