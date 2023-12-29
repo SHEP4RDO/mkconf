@@ -7,10 +7,12 @@ import (
 	"sync"
 )
 
+// XMLConfigReader implements the ConfigReader interface for XML configuration files.
 type XMLConfigReader struct {
-	mu sync.Mutex
+	mu sync.Mutex // Mutex to ensure thread safety during file read and write operations.
 }
 
+// ReadConfig reads the content of an XML configuration file into the provided struct.
 func (x *XMLConfigReader) ReadConfig(filename string, v interface{}) error {
 	x.mu.Lock()
 	defer x.mu.Unlock()
@@ -25,6 +27,8 @@ func (x *XMLConfigReader) ReadConfig(filename string, v interface{}) error {
 
 	return nil
 }
+
+// ReadConfigToMap reads the content of an XML configuration file into a map.
 func (x *XMLConfigReader) ReadConfigToMap(filename string) (map[string]interface{}, error) {
 	x.mu.Lock()
 	defer x.mu.Unlock()
@@ -41,6 +45,7 @@ func (x *XMLConfigReader) ReadConfigToMap(filename string) (map[string]interface
 	return configMap, nil
 }
 
+// UpdateConfig writes the provided struct as XML to the configuration file.
 func (x *XMLConfigReader) UpdateConfig(filename string, v interface{}) error {
 	x.mu.Lock()
 	defer x.mu.Unlock()

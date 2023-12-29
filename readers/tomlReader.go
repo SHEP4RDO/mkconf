@@ -9,10 +9,12 @@ import (
 	"github.com/pelletier/go-toml"
 )
 
+// TOMLConfigReader implements the ConfigReader interface for TOML configuration files.
 type TOMLConfigReader struct {
-	mu sync.Mutex
+	mu sync.Mutex // Mutex to ensure thread safety during file read and write operations.
 }
 
+// ReadConfig reads the content of a TOML configuration file into the provided struct.
 func (t *TOMLConfigReader) ReadConfig(filename string, v interface{}) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -33,6 +35,8 @@ func (t *TOMLConfigReader) ReadConfig(filename string, v interface{}) error {
 
 	return nil
 }
+
+// ReadConfigToMap reads the content of a TOML configuration file into a map.
 func (t *TOMLConfigReader) ReadConfigToMap(filename string) (map[string]interface{}, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -53,6 +57,7 @@ func (t *TOMLConfigReader) ReadConfigToMap(filename string) (map[string]interfac
 	return configMap, nil
 }
 
+// UpdateConfig writes the provided struct as TOML to the configuration file.
 func (t *TOMLConfigReader) UpdateConfig(filename string, v interface{}) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()

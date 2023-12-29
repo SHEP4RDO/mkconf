@@ -6,14 +6,18 @@ import (
 	"time"
 )
 
+// ConfigChangeLog represents a log entry capturing changes in configuration fields.
 type ConfigChangeLog struct {
-	ConfigName string
-	FieldName  string
-	OldValue   interface{}
-	NewValue   interface{}
-	Timestamp  time.Time
+	ConfigName string      // Name of the configuration.
+	FieldName  string      // Name of the field that changed.
+	OldValue   interface{} // Previous value of the field.
+	NewValue   interface{} // New value of the field.
+	Timestamp  time.Time   // Timestamp of when the change occurred.
 }
 
+// compareFields compares two configurations represented as maps and records changes.
+// It populates the provided changes slice with ConfigChangeLog entries.
+// Returns an error if the oldConfig or newConfig is not a map.
 func compareFields(configName, configFullName string, oldConfig, newConfig interface{}, changes *[]ConfigChangeLog) error {
 	oldMap, ok := oldConfig.(map[string]interface{})
 	if !ok {
@@ -67,20 +71,26 @@ func compareFields(configName, configFullName string, oldConfig, newConfig inter
 	return nil
 }
 
+// isStruct checks if the given type is a struct.
 func isStruct(t reflect.Type) bool {
 	return t.Kind() == reflect.Struct
 }
 
+// logChanges records the changes in the configuration log for a specific configuration.
+// It acquires a lock to ensure thread safety during the log update.
 func (c *ConfigList) logChanges(configName string, changes []ConfigChangeLog) {
 	c.logMutex.Lock()
 	defer c.logMutex.Unlock()
 	c.changeLogs[configName] = append(c.changeLogs[configName], changes...)
-	c.settings[configName].Ch_ConfigTracking <- struct{}{}
+	c.settings[configName].Ch_ConfigTracking <- configName
 }
 
+// GetLogChanges retrieves the log of changes for a specific configuration.
 func (c *ConfigList) GetLogChanges(configName string) []ConfigChangeLog {
 	return c.changeLogs[configName]
 }
-func (c *ConfigList) GetChanLogChanges(configName string) chan struct{} {
+
+// GetChanLogChanges retrieves the channel for tracking changes for a specific configuration.
+func (c *ConfigList) GetChanLogChanges(configName string) chan string {
 	return c.settings[configName].Ch_ConfigTracking
 }

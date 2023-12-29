@@ -10,6 +10,10 @@ import (
 	"time"
 )
 
+// StartChangeMonitoring initiates monitoring for changes in the specified configuration.
+// It sets up a goroutine that periodically checks for configuration changes and triggers notifications.
+// The monitoring continues until the associated context is canceled or the quit signal is received.
+// Returns an error if the configuration is not found.
 func (c *ConfigList) StartChangeMonitoring(configName string, v interface{}) error {
 	quit := make(chan struct{})
 	settings, ok := c.settings[configName]
@@ -60,6 +64,9 @@ func (c *ConfigList) StartChangeMonitoring(configName string, v interface{}) err
 	}()
 	return nil
 }
+
+// StopChangeMonitoring stops the change monitoring for the specified configuration.
+// It cancels the associated context, waits for the goroutine to finish, and disables change validation.
 func (c *ConfigList) StopChangeMonitoring(configName string) {
 	if settings, ok := c.settings[configName]; ok {
 		settings.cancel()
@@ -67,6 +74,13 @@ func (c *ConfigList) StopChangeMonitoring(configName string) {
 		c.settings[configName].enableChangeValidation = false
 	}
 }
+
+// checkConfigChanges checks for changes in the configuration file and triggers updates accordingly.
+// It calculates the hash of the file content, compares it with the last recorded hash,
+// and reads the configuration file if a change is detected.
+// If change tracking is enabled, it logs the changes.
+// Finally, it updates the configuration settings and notifies listeners of the changes.
+// Returns an error if there is an issue reading the configuration or calculating the hash.
 func (c *ConfigList) checkConfigChanges(configName string, v interface{}) error {
 	if c.settings[configName].enableChangeValidation {
 		var configMap map[string]interface{}
@@ -102,7 +116,7 @@ func (c *ConfigList) checkConfigChanges(configName string, v interface{}) error 
 
 			select {
 			case c.settings[configName].Ch_ConfigChanged <- configName:
-			case c.settings[configName].Ch_ConfigTracking <- struct{}{}:
+			case c.settings[configName].Ch_ConfigTracking <- configName:
 			}
 		}
 	}
@@ -110,6 +124,8 @@ func (c *ConfigList) checkConfigChanges(configName string, v interface{}) error 
 	return nil
 }
 
+// calculateFileHash calculates the MD5 hash of the file content at the specified filename.
+// It returns the hexadecimal representation of the hash and an error if there is an issue reading the file.
 func (c *ConfigSettings) calculateFileHash(filename string) (string, error) {
 	fileContent, err := ioutil.ReadFile(filename)
 	if err != nil {

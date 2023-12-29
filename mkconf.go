@@ -10,95 +10,119 @@ import (
 	. "mkconf/readers"
 )
 
+// ConfigSettings represents the configuration settings for a specific configuration file.
 type ConfigSettings struct {
-	configName     string
-	configPath     string
-	configFullPath string
-	configType     string
-	Reader         ConfigReader
-	checkSec       int
-	repeatSec      int
-	lastConfigHash string
+	configName     string                 // Name of the configuration
+	configPath     string                 // Path to the configuration file
+	configFullPath string                 // Full path to the configuration file
+	configType     string                 // Type of the configuration file (e.g., JSON, YAML)
+	Reader         ConfigReader           // ConfigReader implementation for reading the configuration
+	checkSec       int                    // Interval in seconds for checking configuration changes
+	repeatSec      int                    // Interval in seconds for repeated configuration checks
+	lastConfigHash string                 // Hash of the last known configuration file content
+	configMAP      map[string]interface{} // Map representation of the configuration
+	config         interface{}            // Instance of the configuration struct
+	mu             sync.Mutex             // Mutex for synchronizing access to configuration data
+	ctx            context.Context        // Context for cancellation of configuration monitoring
+	cancel         context.CancelFunc     // Cancel function to stop configuration monitoring
+	waitGroup      *sync.WaitGroup        // WaitGroup to wait for the completion of monitoring goroutines
 
-	configMAP map[string]interface{}
-	config    interface{}
+	enableChangeValidation bool // Flag to enable change validation for the configuration
+	enableChangeTracking   bool // Flag to enable change tracking for the configuration
 
-	mu        sync.Mutex
-	ctx       context.Context
-	cancel    context.CancelFunc
-	waitGroup *sync.WaitGroup
-
-	enableChangeValidation bool
-	enableChangeTracking   bool
-
-	ch_ChangeValidation chan struct{}
-	Ch_ConfigChanged    chan string
-	Ch_ConfigTracking   chan struct{}
+	ch_ChangeValidation chan struct{} // Channel for signaling change validation
+	Ch_ConfigChanged    chan string   // Channel for signaling configuration changes
+	Ch_ConfigTracking   chan string   // Channel for signaling configuration tracking
 }
 
+// ConfigList represents a collection of configuration settings.
 type ConfigList struct {
-	settingsMutex sync.Mutex
-	settings      map[string]*ConfigSettings
-	changeLogs    map[string][]ConfigChangeLog
-	logMutex      sync.Mutex
+	settingsMutex sync.Mutex                   // Mutex for synchronizing access to the settings map
+	settings      map[string]*ConfigSettings   // Map of configuration settings with configName as the key
+	changeLogs    map[string][]ConfigChangeLog // Map of configuration change logs with configName as the key
+	logMutex      sync.Mutex                   // Mutex for synchronizing access to the changeLogs map
 }
 
+// NewConfigList creates a new ConfigList instance.
 func NewConfigList() *ConfigList {
 	list := &ConfigList{}
 	list.settings = make(map[string]*ConfigSettings)
 	return list
 }
 
+// GetSettings returns the ConfigSettings for the specified configuration file name.
 func (c *ConfigList) GetSettings(fileName string) *ConfigSettings {
 	return c.settings[fileName]
 }
 
+// SetConfigName sets the name of the configuration.
 func (c *ConfigSettings) SetConfigName(fileName string) *ConfigSettings {
 	c.configName = fileName
 	return c
 }
+
+// SetConfigPath sets the path of the configuration file.
 func (c *ConfigSettings) SetConfigPath(path string) *ConfigSettings {
 	c.configPath = path
 	return c
 }
+
+// SetChangeValidation sets the flag to enable or disable change validation for the configuration.
 func (c *ConfigSettings) SetChangeValidation(isValid bool) *ConfigSettings {
 	c.enableChangeValidation = isValid
 	return c
 }
+
+// SetConfigType sets the type of the configuration file (e.g., JSON, YAML).
 func (c *ConfigSettings) SetConfigType(fileType string) *ConfigSettings {
 	c.configType = fileType
 	return c
 }
+
+// SetConfigFullpath sets the full path of the configuration file.
 func (c *ConfigSettings) SetConfigFullpath(fullPath string) *ConfigSettings {
 	c.configFullPath = fullPath
 	return c
 }
+
+// GetChangesChan returns the channel for signaling configuration changes for the specified configuration name.
 func (c *ConfigList) GetChangesChan(configName string) chan string {
 	return c.settings[configName].Ch_ConfigChanged
 }
 
+// SetReader sets the ConfigReader for reading the configuration.
 func (c *ConfigSettings) SetReader(reader ConfigReader) *ConfigSettings {
 	c.Reader = reader
 	return c
 }
 
-func (c *ConfigSettings) SetCheckSec(repeat_interval int) *ConfigSettings {
-	c.checkSec = repeat_interval
+// SetCheckSec sets the repeat interval in seconds for checking configuration changes.
+func (c *ConfigSettings) SetCheckSec(repeatInterval int) *ConfigSettings {
+	c.checkSec = repeatInterval
 	return c
 }
-func (c *ConfigSettings) SetRepeatSec(check_interval int) *ConfigSettings {
-	c.repeatSec = check_interval
+
+// SetRepeatSec sets the check interval in seconds for repeated configuration checks.
+func (c *ConfigSettings) SetRepeatSec(checkInterval int) *ConfigSettings {
+	c.repeatSec = checkInterval
 	return c
 }
+
+// setHash sets the last known hash of the configuration file.
 func (c *ConfigSettings) setHash(hash string) *ConfigSettings {
 	c.lastConfigHash = hash
 	return c
 }
+
+// SetChangeTracking sets the flag to enable or disable change tracking for the configuration.
 func (c *ConfigSettings) SetChangeTracking(mode bool) *ConfigSettings {
 	c.enableChangeTracking = mode
 	return c
 }
 
+// LoadConfig loads the configuration with the specified name and populates the provided interface.
+// It automatically selects the appropriate reader based on the file type if the reader is not set.
+// It returns an error if the configuration cannot be loaded or if there is an issue with the reader.
 func (c *ConfigList) LoadConfig(configName string, v interface{}) error {
 	if c.settings[configName].Reader == nil {
 		reader := c.settings[configName].checkReader()
@@ -116,6 +140,9 @@ func (c *ConfigList) LoadConfig(configName string, v interface{}) error {
 	return nil
 }
 
+// UpdateConfig updates the configuration with the specified name by applying changes from the provided interface.
+// It first stops the change monitoring, performs the update, and then restarts the change monitoring.
+// It returns an error if the update fails or if the reader is not set for the configuration.
 func (c *ConfigList) UpdateConfig(configName string, v interface{}) error {
 	c.settingsMutex.Lock()
 	defer c.settingsMutex.Unlock()
@@ -145,6 +172,8 @@ func (c *ConfigList) UpdateConfig(configName string, v interface{}) error {
 	return nil
 }
 
+// checkReader selects a ConfigReader based on the file type and returns it.
+// It is used to automatically set the reader if it is not explicitly provided.
 func (s *ConfigSettings) checkReader() ConfigReader {
 	_type := strings.ToLower(s.configType)
 	switch _type {
@@ -163,6 +192,9 @@ func (s *ConfigSettings) checkReader() ConfigReader {
 	}
 }
 
+// AddConfigList adds a new configuration to the ConfigList with the provided name, path, type, and interface.
+// It initializes the configuration settings, including channels and readers, and calculates the initial hash.
+// Returns an error if there's an issue adding the new configuration.
 func (c *ConfigList) AddConfigList(configName, configPath, configType string, v interface{}) error {
 	var err error
 	settings := ConfigSettings{
@@ -175,7 +207,7 @@ func (c *ConfigList) AddConfigList(configName, configPath, configType string, v 
 		repeatSec:              10,
 		ch_ChangeValidation:    make(chan struct{}),
 		Ch_ConfigChanged:       make(chan string),
-		Ch_ConfigTracking:      make(chan struct{}),
+		Ch_ConfigTracking:      make(chan string),
 		waitGroup:              new(sync.WaitGroup),
 	}
 	c.changeLogs = map[string][]ConfigChangeLog{}
@@ -190,6 +222,8 @@ func (c *ConfigList) AddConfigList(configName, configPath, configType string, v 
 	return nil
 }
 
+// defineHash calculates the hash of the configuration file and initializes the configuration map.
+// It returns an error if there's an issue calculating the hash or converting the configuration to a map.
 func (c *ConfigSettings) defineHash(configName string, v interface{}) error {
 	var err error
 	c.lastConfigHash, err = c.calculateFileHash(c.configFullPath)
@@ -202,10 +236,15 @@ func (c *ConfigSettings) defineHash(configName string, v interface{}) error {
 	return nil
 }
 
+// defineReader sets the ConfigReader in ConfigSettings based on the configuration file type.
+// It returns the updated ConfigSettings instance.
 func (c *ConfigSettings) defineReader() *ConfigSettings {
 	c.Reader = c.checkReader()
 	return c
 }
+
+// convertToMap converts the configuration file to a map based on its type using the appropriate reader.
+// It returns the map representation of the configuration file and an error if there's an issue.
 func (c *ConfigSettings) convertToMap(fullPath string) (map[string]interface{}, error) {
 	tmp := make(map[string]interface{})
 	var err error

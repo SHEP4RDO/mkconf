@@ -7,10 +7,12 @@ import (
 	"sync"
 )
 
+// JSONConfigReader implements the ConfigReader interface for JSON configuration files.
 type JSONConfigReader struct {
-	mu sync.Mutex
+	mu sync.Mutex // Mutex to ensure thread safety during file read and write operations.
 }
 
+// ReadConfig reads the content of a JSON configuration file into the provided struct.
 func (j *JSONConfigReader) ReadConfig(filename string, v interface{}) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()
@@ -26,6 +28,7 @@ func (j *JSONConfigReader) ReadConfig(filename string, v interface{}) error {
 	return nil
 }
 
+// ReadConfigToMap reads the content of a JSON configuration file into a map.
 func (j *JSONConfigReader) ReadConfigToMap(filename string) (map[string]interface{}, error) {
 	j.mu.Lock()
 	defer j.mu.Unlock()
@@ -42,6 +45,7 @@ func (j *JSONConfigReader) ReadConfigToMap(filename string) (map[string]interfac
 	return configMap, nil
 }
 
+// UpdateConfig writes the provided struct as JSON to the configuration file.
 func (j *JSONConfigReader) UpdateConfig(filename string, v interface{}) error {
 	j.mu.Lock()
 	defer j.mu.Unlock()

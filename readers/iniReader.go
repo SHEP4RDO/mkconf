@@ -8,10 +8,12 @@ import (
 	"gopkg.in/ini.v1"
 )
 
+// INIConfigReader implements the ConfigReader interface for INI configuration files.
 type INIConfigReader struct {
-	mu sync.Mutex
+	mu sync.Mutex // Mutex to ensure thread safety during file read and write operations.
 }
 
+// ReadConfig reads the content of an INI configuration file into the provided struct.
 func (i *INIConfigReader) ReadConfig(filename string, v interface{}) error {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -33,6 +35,7 @@ func (i *INIConfigReader) ReadConfig(filename string, v interface{}) error {
 	return nil
 }
 
+// ReadConfigToMap reads the content of an INI configuration file into a map.
 func (i *INIConfigReader) ReadConfigToMap(filename string) (map[string]interface{}, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
@@ -59,6 +62,7 @@ func (i *INIConfigReader) ReadConfigToMap(filename string) (map[string]interface
 	return configMap, nil
 }
 
+// UpdateConfig writes the provided struct as INI to the configuration file.
 func (i *INIConfigReader) UpdateConfig(filename string, v interface{}) error {
 	i.mu.Lock()
 	defer i.mu.Unlock()

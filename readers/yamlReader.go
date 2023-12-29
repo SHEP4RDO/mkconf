@@ -8,10 +8,12 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// YAMLConfigReader implements the ConfigReader interface for YAML configuration files.
 type YAMLConfigReader struct {
-	mu sync.Mutex
+	mu sync.Mutex // Mutex to ensure thread safety during file read and write operations.
 }
 
+// ReadConfig reads the content of a YAML configuration file into the provided struct.
 func (y *YAMLConfigReader) ReadConfig(filename string, v interface{}) error {
 	y.mu.Lock()
 	defer y.mu.Unlock()
@@ -27,6 +29,7 @@ func (y *YAMLConfigReader) ReadConfig(filename string, v interface{}) error {
 	return nil
 }
 
+// ReadConfigToMap reads the content of a YAML configuration file into a map.
 func (y *YAMLConfigReader) ReadConfigToMap(filename string) (map[string]interface{}, error) {
 	y.mu.Lock()
 	defer y.mu.Unlock()
@@ -43,6 +46,7 @@ func (y *YAMLConfigReader) ReadConfigToMap(filename string) (map[string]interfac
 	return configMap, nil
 }
 
+// UpdateConfig writes the provided struct as YAML to the configuration file.
 func (y *YAMLConfigReader) UpdateConfig(filename string, v interface{}) error {
 	y.mu.Lock()
 	defer y.mu.Unlock()
