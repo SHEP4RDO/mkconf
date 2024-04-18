@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	. "mkconf/readers"
+	reader "mkconf/readers"
 )
 
 // ConfigSettings represents the configuration settings for a specific configuration file.
@@ -16,7 +16,7 @@ type ConfigSettings struct {
 	configPath     string                 // Path to the configuration file
 	configFullPath string                 // Full path to the configuration file
 	configType     string                 // Type of the configuration file (e.g., JSON, YAML)
-	Reader         ConfigReader           // ConfigReader implementation for reading the configuration
+	Reader         reader.ConfigReader    // ConfigReader implementation for reading the configuration
 	checkSec       int                    // Interval in seconds for checking configuration changes
 	repeatSec      int                    // Interval in seconds for repeated configuration checks
 	lastConfigHash string                 // Hash of the last known configuration file content
@@ -91,7 +91,7 @@ func (c *ConfigList) GetChangesChan(configName string) chan string {
 }
 
 // SetReader sets the ConfigReader for reading the configuration.
-func (c *ConfigSettings) SetReader(reader ConfigReader) *ConfigSettings {
+func (c *ConfigSettings) SetReader(reader reader.ConfigReader) *ConfigSettings {
 	c.Reader = reader
 	return c
 }
@@ -109,7 +109,7 @@ func (c *ConfigSettings) SetRepeatSec(checkInterval int) *ConfigSettings {
 }
 
 // setHash sets the last known hash of the configuration file.
-func (c *ConfigSettings) setHash(hash string) *ConfigSettings {
+func (c *ConfigSettings) SetHash(hash string) *ConfigSettings {
 	c.lastConfigHash = hash
 	return c
 }
@@ -134,7 +134,7 @@ func (c *ConfigList) LoadConfig(configName string, v interface{}) error {
 	}
 	err := c.settings[configName].Reader.ReadConfig(c.settings[configName].configFullPath, v)
 	if err != nil {
-		return fmt.Errorf("load config %v: error while read config: %v\n", configName, err)
+		return fmt.Errorf("load config %v: error while read config: %v", configName, err)
 	}
 	c.settings[configName].config = v
 	return nil
@@ -174,19 +174,19 @@ func (c *ConfigList) UpdateConfig(configName string, v interface{}) error {
 
 // checkReader selects a ConfigReader based on the file type and returns it.
 // It is used to automatically set the reader if it is not explicitly provided.
-func (s *ConfigSettings) checkReader() ConfigReader {
+func (s *ConfigSettings) checkReader() reader.ConfigReader {
 	_type := strings.ToLower(s.configType)
 	switch _type {
 	case ".json", ".mk.json":
-		return &JSONConfigReader{}
+		return &reader.JSONConfigReader{}
 	case ".xml", ".mk.xml":
-		return &XMLConfigReader{}
+		return &reader.XMLConfigReader{}
 	case ".yaml", ".yml", ".mk.yaml", ".mk.yml":
-		return &YAMLConfigReader{}
+		return &reader.YAMLConfigReader{}
 	case ".toml", ".mk.toml":
-		return &TOMLConfigReader{}
+		return &reader.TOMLConfigReader{}
 	case ".ini", ".mk.ini":
-		return &INIConfigReader{}
+		return &reader.INIConfigReader{}
 	default:
 		return nil
 	}
@@ -215,7 +215,7 @@ func (c *ConfigList) AddConfigList(configName, configPath, configType string, v 
 	fullConfigName := configName + configType
 	fullPath := filepath.Join(configPath, fullConfigName)
 	c.settings[configName].SetConfigPath(configPath).SetConfigFullpath(fullPath).defineReader()
-	err = c.settings[configName].defineHash(configName, v)
+	err = c.settings[configName].defineHash(v)
 	if err != nil {
 		return fmt.Errorf("mkconf: error add new config %v: %v", configName, err)
 	}
@@ -224,7 +224,7 @@ func (c *ConfigList) AddConfigList(configName, configPath, configType string, v 
 
 // defineHash calculates the hash of the configuration file and initializes the configuration map.
 // It returns an error if there's an issue calculating the hash or converting the configuration to a map.
-func (c *ConfigSettings) defineHash(configName string, v interface{}) error {
+func (c *ConfigSettings) defineHash(v interface{}) error {
 	var err error
 	c.lastConfigHash, err = c.calculateFileHash(c.configFullPath)
 	if err != nil {
@@ -250,15 +250,15 @@ func (c *ConfigSettings) convertToMap(fullPath string) (map[string]interface{}, 
 	var err error
 
 	switch reader := c.Reader.(type) {
-	case *JSONConfigReader:
+	case *reader.JSONConfigReader:
 		tmp, err = reader.ReadConfigToMap(fullPath)
-	case *XMLConfigReader:
+	case *reader.XMLConfigReader:
 		tmp, err = reader.ReadConfigToMap(fullPath)
-	case *YAMLConfigReader:
+	case *reader.YAMLConfigReader:
 		tmp, err = reader.ReadConfigToMap(fullPath)
-	case *TOMLConfigReader:
+	case *reader.TOMLConfigReader:
 		tmp, err = reader.ReadConfigToMap(fullPath)
-	case *INIConfigReader:
+	case *reader.INIConfigReader:
 		tmp, err = reader.ReadConfigToMap(fullPath)
 	default:
 		return nil, fmt.Errorf("unsupported ConfigReader type - %v", reader)
