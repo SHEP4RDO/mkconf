@@ -40,7 +40,7 @@
 
 ## Использование
 
-Инструкции по использованию модуля `mkconf` можно найти в соответствующей [вики]([https://chat.openai.com/c/wiki](https://github.com/SHEP4RDO/mkconf/wiki) проекта.
+Инструкции по использованию модуля `mkconf` можно найти в соответствующей [вики](https://github.com/SHEP4RDO/mkconf/wiki) проекта.
 
 **Лицензия:**
 
