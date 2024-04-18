@@ -101,9 +101,8 @@ func (c *ConfigList) checkConfigChanges(configName string, v interface{}) error 
 			if c.settings[configName].enableChangeTracking {
 				changes := make([]ConfigChangeLog, 0)
 				configMap, err = c.settings[configName].convertToMap(c.settings[configName].configFullPath)
-				compareFields(configName, c.settings[configName].configName+c.settings[configName].configType, c.settings[configName].configMAP, configMap, &changes)
+				compareFields(configName, c.settings[configName].configMAP, configMap, &changes)
 				c.logChanges(configName, changes)
-
 				if err != nil {
 					return fmt.Errorf("monitoring: error v is not of type map[string]interface{}")
 				}
