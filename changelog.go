@@ -18,7 +18,7 @@ type ConfigChangeLog struct {
 // compareFields compares two configurations represented as maps and records changes.
 // It populates the provided changes slice with ConfigChangeLog entries.
 // Returns an error if the oldConfig or newConfig is not a map.
-func compareFields(configName, configFullName string, oldConfig, newConfig interface{}, changes *[]ConfigChangeLog) error {
+func compareFields(configName string, oldConfig, newConfig interface{}, changes *[]ConfigChangeLog) error {
 	oldMap, ok := oldConfig.(map[string]interface{})
 	if !ok {
 		return fmt.Errorf("monitoring changes: error while check changes %v : oldConfig is not of type map[string]interface{}", configName)
@@ -71,11 +71,6 @@ func compareFields(configName, configFullName string, oldConfig, newConfig inter
 	return nil
 }
 
-// isStruct checks if the given type is a struct.
-func isStruct(t reflect.Type) bool {
-	return t.Kind() == reflect.Struct
-}
-
 // logChanges records the changes in the configuration log for a specific configuration.
 // It acquires a lock to ensure thread safety during the log update.
 func (c *ConfigList) logChanges(configName string, changes []ConfigChangeLog) {
@@ -93,4 +88,18 @@ func (c *ConfigList) GetLogChanges(configName string) []ConfigChangeLog {
 // GetChanLogChanges retrieves the channel for tracking changes for a specific configuration.
 func (c *ConfigList) GetChanLogChanges(configName string) chan string {
 	return c.settings[configName].Ch_ConfigTracking
+}
+
+// ClearAllChangeLogs clears all change logs in the ConfigList.
+func (c *ConfigList) ClearAllChangeLogs() {
+	c.logMutex.Lock()
+	defer c.logMutex.Unlock()
+	c.changeLogs = make(map[string][]ConfigChangeLog)
+}
+
+// ClearChangeLogs clears change logs for a specific configuration in the ConfigList.
+func (c *ConfigList) ClearChangeLogs(configName string) {
+	c.logMutex.Lock()
+	defer c.logMutex.Unlock()
+	delete(c.changeLogs, configName)
 }
